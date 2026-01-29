@@ -22,6 +22,7 @@ pip install -r requirements.txt
 
 ### GPU対応について
 PyTorchがCUDA対応でインストールされている場合、自動的にGPUを使用します。
+**GPU使用により学習が約3-5倍高速化します。**
 
 **GPU版PyTorchのインストール（推奨）:**
 ```bash
@@ -35,7 +36,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu121
 pip install torch
 ```
 
-詳細は[PyTorch公式サイト](https://pytorch.org/)を参照してください。
+詳細は[PyTorch公式サイト](https://pytorch.org/)または[GPU使用ガイド](GPU_USAGE.md)を参照してください。
 
 ## 使い方
 

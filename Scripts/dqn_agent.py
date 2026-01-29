@@ -126,12 +126,19 @@ class DQNAgent:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
+            # Validate CUDA device is available
+            if self.device.type == 'cuda' and not torch.cuda.is_available():
+                print("[DQN] Warning: CUDA requested but not available. Using CPU.")
+                self.device = torch.device('cpu')
         
         # Log device info (only once per process to avoid spam)
         if not hasattr(DQNAgent, '_device_logged'):
-            if self.device.type == 'cuda':
-                print(f"[DQN] Using GPU: {torch.cuda.get_device_name(0)}")
-                print(f"[DQN] GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+            if self.device.type == 'cuda' and torch.cuda.is_available():
+                try:
+                    print(f"[DQN] Using GPU: {torch.cuda.get_device_name(0)}")
+                    print(f"[DQN] GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+                except Exception as e:
+                    print(f"[DQN] Using GPU (could not get details: {e})")
             else:
                 print(f"[DQN] Using CPU (GPU not available or not selected)")
             DQNAgent._device_logged = True

@@ -151,18 +151,26 @@ def train_dqn(num_episodes=10000, batch_size=32, target_update_freq=1000,
         device: Device to use for training ('cuda', 'cpu', or None for auto)
     """
     # Setup device
-    if device is None:
+    if device is None or device == 'auto':
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     else:
         device = torch.device(device)
+        # Validate device is available
+        if device.type == 'cuda' and not torch.cuda.is_available():
+            print("\nエラー: CUDA (GPU) が利用できません。CPUを使用します。")
+            print("Error: CUDA (GPU) is not available. Falling back to CPU.")
+            device = torch.device('cpu')
     
     print("="*60)
     print("DQN Othello AI - Training")
     print("="*60)
     print(f"Device: {device}")
-    if device.type == 'cuda':
-        print(f"GPU Name: {torch.cuda.get_device_name(0)}")
-        print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+    if device.type == 'cuda' and torch.cuda.is_available():
+        try:
+            print(f"GPU Name: {torch.cuda.get_device_name(0)}")
+            print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+        except Exception as e:
+            print(f"Warning: Could not get GPU info: {e}")
     print(f"Episodes: {num_episodes}")
     print(f"Batch size: {batch_size}")
     print(f"Target update frequency: {target_update_freq}")
