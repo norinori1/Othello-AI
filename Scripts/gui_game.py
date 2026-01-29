@@ -44,25 +44,6 @@ class GUIPlayer:
     def __init__(self, color):
         self.color = color
         self.color_name = "黒" if color == BLACK else "白"
-        self.selected_move = None
-    
-    def select_move(self, board):
-        """
-        Wait for the player to click on a valid move.
-        
-        Args:
-            board: Board object
-            
-        Returns:
-            tuple: (row, col) or None for pass
-        """
-        moves = board.valid_moves(self.color)
-        
-        if not moves:
-            return None
-        
-        # selected_move will be set by click event handler
-        return self.selected_move
 
 
 class OthelloGUI:
@@ -87,10 +68,18 @@ class OthelloGUI:
         self.players = {BLACK: player_black, WHITE: player_white}
         self.current_player = BLACK
         self.passes = 0
-        self.turn_number = 1
+        self.move_number = 1  # Total moves in the game
         self.game_over = False
         self.winner = None
+        self.valid_moves_cache = None  # Cache for valid moves
+        self.ai_move_time = 0  # Timestamp for AI move delay
         
+    def get_valid_moves(self):
+        """Get valid moves for current player, using cache."""
+        if self.valid_moves_cache is None:
+            self.valid_moves_cache = self.board.valid_moves(self.current_player)
+        return self.valid_moves_cache
+    
     def get_cell_from_pos(self, pos):
         """
         Convert mouse position to board cell coordinates.
@@ -150,7 +139,7 @@ class OthelloGUI:
         
         # Draw valid move indicators for current player
         if not self.game_over:
-            moves = self.board.valid_moves(self.current_player)
+            moves = self.get_valid_moves()
             for (row, col) in moves.keys():
                 center_x = col * CELL_SIZE + CELL_SIZE // 2
                 center_y = row * CELL_SIZE + CELL_SIZE // 2
@@ -168,9 +157,9 @@ class OthelloGUI:
         # Get scores
         score = self.board.score()
         
-        # Draw turn number
-        turn_text = self.small_font.render(f"Turn: {self.turn_number}", True, COLOR_UI_TEXT)
-        self.screen.blit(turn_text, (10, BOARD_WIDTH + 10))
+        # Draw move number
+        move_text = self.small_font.render(f"Move: {self.move_number}", True, COLOR_UI_TEXT)
+        self.screen.blit(move_text, (10, BOARD_WIDTH + 10))
         
         # Draw current player indicator
         if not self.game_over:
@@ -223,17 +212,18 @@ class OthelloGUI:
         row, col = cell
         
         # Check if it's a valid move
-        moves = self.board.valid_moves(self.current_player)
+        moves = self.get_valid_moves()
         if (row, col) in moves:
             # Apply the move
             self.board.apply_move((row, col), self.current_player)
             self.passes = 0
             self.switch_player()
+            self.move_number += 1
     
     def switch_player(self):
         """Switch to the other player."""
         self.current_player = WHITE if self.current_player == BLACK else BLACK
-        self.turn_number += 1
+        self.valid_moves_cache = None  # Invalidate cache
     
     def check_game_over(self):
         """Check if the game is over."""
@@ -243,10 +233,6 @@ class OthelloGUI:
         
         # Game over if both players passed
         if self.passes >= 2:
-            return True
-        
-        # Game over if neither player has valid moves
-        if not self.board.valid_moves(BLACK) and not self.board.valid_moves(WHITE):
             return True
         
         return False
@@ -260,7 +246,7 @@ class OthelloGUI:
             return False
         
         # Check if player has valid moves
-        moves = self.board.valid_moves(self.current_player)
+        moves = self.get_valid_moves()
         
         if not moves:
             # Pass
@@ -276,6 +262,7 @@ class OthelloGUI:
             self.board.apply_move(move, self.current_player)
             self.passes = 0
             self.switch_player()
+            self.move_number += 1
             return True
         
         return False
@@ -288,11 +275,12 @@ class OthelloGUI:
         if not isinstance(player, GUIPlayer):
             return
         
-        moves = self.board.valid_moves(self.current_player)
+        moves = self.get_valid_moves()
         if not moves:
             # Pass
             self.passes += 1
             self.switch_player()
+            # Show pass message in UI (will be visible on next frame)
     
     def run(self):
         """Main game loop."""
@@ -318,9 +306,15 @@ class OthelloGUI:
             # Handle AI turn if current player is AI
             if not self.game_over:
                 if isinstance(self.players[self.current_player], AIPlayer):
-                    pygame.time.wait(500)  # Small delay for AI moves to be visible
-                    self.handle_ai_turn()
+                    # Use timestamp to delay AI moves
+                    current_time = pygame.time.get_ticks()
+                    if self.ai_move_time == 0:
+                        self.ai_move_time = current_time + 500  # Set delay
+                    elif current_time >= self.ai_move_time:
+                        self.handle_ai_turn()
+                        self.ai_move_time = 0  # Reset for next AI move
                 else:
+                    self.ai_move_time = 0  # Reset when human player
                     # Handle human pass
                     self.handle_human_pass()
             
@@ -351,20 +345,23 @@ def select_player_type(color_name):
         try:
             choice = input("選択 (1-3): ").strip()
             
+            color = BLACK if color_name == "黒" else WHITE
+            
             if choice == "1":
-                color = BLACK if color_name == "黒" else WHITE
                 return GUIPlayer(color)
             elif choice == "2":
-                color = BLACK if color_name == "黒" else WHITE
                 agent = RandomAgent(color)
                 return AIPlayer(agent)
             elif choice == "3":
-                color = BLACK if color_name == "黒" else WHITE
                 agent = GreedyAgent(color)
                 return AIPlayer(agent)
             else:
                 print("1, 2, または 3 を入力してください")
-        except (ValueError, KeyboardInterrupt):
+        except KeyboardInterrupt:
+            print("\n\nプログラムを中断しました")
+            pygame.quit()
+            sys.exit(0)
+        except ValueError:
             print("\n入力エラー。もう一度入力してください")
 
 
