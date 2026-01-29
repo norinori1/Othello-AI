@@ -40,6 +40,41 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 
+def calculate_intermediate_reward(board_before, board_after, move, color):
+    """
+    Calculate intermediate reward for a move based on strategic features.
+    
+    Args:
+        board_before: Board state before the move
+        board_after: Board state after the move
+        move: The move played (row, col) or None
+        color: Color of the player
+        
+    Returns:
+        float: Intermediate reward
+    """
+    if move is None:
+        return 0.0
+    
+    reward = 0.0
+    
+    # Corner bonus: +0.1 for capturing a corner
+    if board_after.is_corner(move[0], move[1]):
+        reward += 0.1
+    
+    # Edge bonus: +0.05 for capturing an edge (not corner)
+    elif board_after.is_edge(move[0], move[1]):
+        reward += 0.05
+    
+    # Stone difference bonus: +0.01 per net stone gained
+    score_before = board_before.score()
+    score_after = board_after.score()
+    stone_diff = score_after[color] - score_before[color]
+    reward += 0.01 * stone_diff
+    
+    return reward
+
+
 def play_training_game(agent_black, agent_white, training=True):
     """
     Play one game between two agents and collect experiences.
@@ -63,8 +98,10 @@ def play_training_game(agent_black, agent_white, training=True):
     # Game states for each player
     prev_state_black = None
     prev_action_black = None
+    prev_board_black = None
     prev_state_white = None
     prev_action_white = None
+    prev_board_white = None
     
     while True:
         moves = board.valid_moves(to_play)
@@ -81,22 +118,35 @@ def play_training_game(agent_black, agent_white, training=True):
             # Select action
             move = agent.select_move(board, training=training)
             
-            # Store previous state and action
-            if to_play == BLACK:
-                # Store previous experience if exists
-                if prev_state_black is not None:
-                    # Intermediate reward is 0 (only terminal reward matters)
-                    experiences_black.append((prev_state_black, prev_action_black, 0.0, state, False))
-                prev_state_black = state.copy()
-                prev_action_black = move
-            else:
-                if prev_state_white is not None:
-                    experiences_white.append((prev_state_white, prev_action_white, 0.0, state, False))
-                prev_state_white = state.copy()
-                prev_action_white = move
+            # Save board state before move
+            board_before = board.copy()
             
             # Apply move
             board.apply_move(move, to_play)
+            
+            # Calculate intermediate reward
+            intermediate_reward = calculate_intermediate_reward(board_before, board, move, to_play)
+            
+            # Store previous experience if exists
+            if to_play == BLACK:
+                if prev_state_black is not None:
+                    # Calculate intermediate reward for previous move
+                    prev_intermediate_reward = calculate_intermediate_reward(
+                        prev_board_black, board_before, prev_action_black, BLACK)
+                    experiences_black.append((prev_state_black, prev_action_black, 
+                                            prev_intermediate_reward, state, False))
+                prev_state_black = state.copy()
+                prev_action_black = move
+                prev_board_black = board_before
+            else:
+                if prev_state_white is not None:
+                    prev_intermediate_reward = calculate_intermediate_reward(
+                        prev_board_white, board_before, prev_action_white, WHITE)
+                    experiences_white.append((prev_state_white, prev_action_white, 
+                                            prev_intermediate_reward, state, False))
+                prev_state_white = state.copy()
+                prev_action_white = move
+                prev_board_white = board_before
         else:
             passes += 1
             if passes >= 2:
@@ -111,27 +161,34 @@ def play_training_game(agent_black, agent_white, training=True):
     winner = board.winner()
     score = board.score()
     
-    # Reward design: +1 for win, -1 for loss, 0 for draw
-    reward_black = 0.0
-    reward_white = 0.0
+    # Terminal reward: +1 for win, -1 for loss, 0 for draw
+    terminal_reward_black = 0.0
+    terminal_reward_white = 0.0
     
     if winner == BLACK:
-        reward_black = 1.0
-        reward_white = -1.0
+        terminal_reward_black = 1.0
+        terminal_reward_white = -1.0
     elif winner == WHITE:
-        reward_black = -1.0
-        reward_white = 1.0
+        terminal_reward_black = -1.0
+        terminal_reward_white = 1.0
     # else: draw, both get 0
     
-    # Add terminal experiences
+    # Add terminal experiences with both intermediate and terminal rewards
     if prev_state_black is not None:
-        # Final state is the current board state
+        # Calculate intermediate reward for the last move
+        last_intermediate_reward = calculate_intermediate_reward(
+            prev_board_black, board, prev_action_black, BLACK)
+        # Combine with terminal reward
+        final_reward_black = last_intermediate_reward + terminal_reward_black
         final_state = board.to_tensor(BLACK)
-        experiences_black.append((prev_state_black, prev_action_black, reward_black, final_state, True))
+        experiences_black.append((prev_state_black, prev_action_black, final_reward_black, final_state, True))
     
     if prev_state_white is not None:
+        last_intermediate_reward = calculate_intermediate_reward(
+            prev_board_white, board, prev_action_white, WHITE)
+        final_reward_white = last_intermediate_reward + terminal_reward_white
         final_state = board.to_tensor(WHITE)
-        experiences_white.append((prev_state_white, prev_action_white, reward_white, final_state, True))
+        experiences_white.append((prev_state_white, prev_action_white, final_reward_white, final_state, True))
     
     return winner, experiences_black, experiences_white
 
