@@ -25,8 +25,6 @@ class HumanPlayer:
         moves = board.valid_moves(self.color)
         
         if not moves:
-            print(f"{self.color_name}はパスです")
-            input("Enterキーを押して続行...")
             return None
         
         print(f"\n{self.color_name}のターンです")
@@ -76,14 +74,16 @@ class HumanPlayer:
 class AIPlayer:
     """AI player that wraps an agent."""
     
-    def __init__(self, agent):
+    def __init__(self, agent, silent=False):
         """
         Args:
             agent: An agent object with select_move(board) method
+            silent: If True, suppress output messages
         """
         self.agent = agent
         self.color = agent.color
         self.color_name = "黒(●)" if self.color == BLACK else "白(○)"
+        self.silent = silent
     
     def select_move(self, board):
         """
@@ -98,9 +98,9 @@ class AIPlayer:
         moves = board.valid_moves(self.color)
         
         if not moves:
-            print(f"{self.color_name}(AI)はパスです")
             return None
         
         move = self.agent.select_move(board)
-        print(f"{self.color_name}(AI)が ({move[0]}, {move[1]}) に着手しました")
+        if not self.silent:
+            print(f"{self.color_name}(AI)が ({move[0]}, {move[1]}) に着手しました")
         return move

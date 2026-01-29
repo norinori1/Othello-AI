@@ -13,14 +13,18 @@ from Scripts.agents import RandomAgent, GreedyAgent
 from Scripts.game import OthelloGame
 
 
-def demo_random_vs_greedy():
-    """Demonstrate Random AI vs Greedy AI."""
-    print("\n" + "="*60)
-    print("デモ: ランダムAI（黒） vs 貪欲AI（白）")
-    print("="*60)
+def play_demo_game(agent_black, agent_white, title):
+    """
+    Play a demo game between two agents.
     
-    agent_black = RandomAgent(BLACK)
-    agent_white = GreedyAgent(WHITE)
+    Args:
+        agent_black: Black player agent
+        agent_white: White player agent
+        title: Title to display
+    """
+    print("\n" + "="*60)
+    print(title)
+    print("="*60)
     
     player_black = AIPlayer(agent_black)
     player_white = AIPlayer(agent_white)
@@ -40,35 +44,20 @@ def demo_random_vs_greedy():
     
     # Display final result
     game.display_result()
+
+
+def demo_random_vs_greedy():
+    """Demonstrate Random AI vs Greedy AI."""
+    agent_black = RandomAgent(BLACK)
+    agent_white = GreedyAgent(WHITE)
+    play_demo_game(agent_black, agent_white, "デモ: ランダムAI（黒） vs 貪欲AI（白）")
 
 
 def demo_greedy_vs_greedy():
     """Demonstrate Greedy AI vs Greedy AI."""
-    print("\n" + "="*60)
-    print("デモ: 貪欲AI（黒） vs 貪欲AI（白）")
-    print("="*60)
-    
     agent_black = GreedyAgent(BLACK)
     agent_white = GreedyAgent(WHITE)
-    
-    player_black = AIPlayer(agent_black)
-    player_white = AIPlayer(agent_white)
-    
-    game = OthelloGame(player_black, player_white)
-    
-    # Play the game
-    turn_count = 0
-    while not game.is_game_over():
-        if turn_count % 10 == 0:
-            game.display_board()
-        
-        success = game.play_turn()
-        if success:
-            game.switch_player()
-            turn_count += 1
-    
-    # Display final result
-    game.display_result()
+    play_demo_game(agent_black, agent_white, "デモ: 貪欲AI（黒） vs 貪欲AI（白）")
 
 
 def run_statistics():
@@ -84,8 +73,9 @@ def run_statistics():
         agent_black = RandomAgent(BLACK)
         agent_white = GreedyAgent(WHITE)
         
-        player_black = AIPlayer(agent_black)
-        player_white = AIPlayer(agent_white)
+        # Use silent mode to suppress AI move announcements
+        player_black = AIPlayer(agent_black, silent=True)
+        player_white = AIPlayer(agent_white, silent=True)
         
         game = OthelloGame(player_black, player_white)
         

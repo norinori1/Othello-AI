@@ -34,11 +34,17 @@ python Scripts/game.py
 - **ランダムAI**: ランダムに着手を選択
 - **貪欲AI**: 最も多く石を取れる手を選択
 
-### 自己対戦の実行
-AIエージェント同士の自己対戦を実行し、学習データを生成できます。
+### デモンストレーション
+AIエージェント同士の対戦デモと統計を実行できます。
 
 ```bash
-python -m Scripts.self_play
+python -m Scripts.demo
+```
+
+または
+
+```bash
+python Scripts/demo.py
 ```
 
 ## プロジェクト構成
@@ -47,10 +53,11 @@ Othello-AI/
 ├── Scripts/
 │   ├── __init__.py       # パッケージ初期化
 │   ├── board.py          # ボード管理とゲームロジック
-│   ├── game.py           # メインゲームインターフェース
-│   ├── player.py         # プレイヤークラス（人間・AI）
+│   ├── game.py           # メインゲームインターフェース（新規追加）
+│   ├── player.py         # プレイヤークラス（新規追加）
 │   ├── agents.py         # AIエージェント（ランダム・貪欲）
-│   └── self_play.py      # 自己対戦実行スクリプト
+│   ├── demo.py           # デモスクリプト（新規追加）
+│   └── self_play.py      # 自己対戦実行スクリプト（将来のフェーズ用）
 ├── Specification/        # 仕様書
 │   └── General.md        # プロジェクト仕様書
 ├── requirements.txt      # 必要なライブラリ

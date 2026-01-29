@@ -54,9 +54,12 @@ class OthelloGame:
         moves = self.board.valid_moves(self.current_player)
         
         if not moves:
-            # Pass
+            # Pass - display message
+            color_name = "黒(●)" if self.current_player == BLACK else "白(○)"
+            print(f"{color_name}はパスです")
+            if hasattr(player, '__class__') and player.__class__.__name__ == 'HumanPlayer':
+                input("Enterキーを押して続行...")
             self.passes += 1
-            player.select_move(self.board)  # Will display pass message
             return True
         
         # Reset pass counter when a move is made
@@ -65,16 +68,13 @@ class OthelloGame:
         # Get move from player
         move = player.select_move(self.board)
         
-        if move is None:
-            # This shouldn't happen if moves exist, but handle it
-            return True
-        
         # Apply move
         try:
             self.board.apply_move(move, self.current_player)
             return True
         except ValueError as e:
-            print(f"エラー: {e}")
+            color_name = "黒(●)" if self.current_player == BLACK else "白(○)"
+            print(f"エラー ({color_name}): {e}")
             return False
     
     def switch_player(self):
@@ -186,8 +186,18 @@ def main():
     while True:
         play_again = input("もう一度プレイしますか？ (y/n): ").strip().lower()
         if play_again in ['y', 'yes', 'はい']:
-            main()
-            break
+            # Use loop instead of recursion to avoid stack overflow
+            print("\n" + "="*40)
+            print("新しいゲームを開始します")
+            print("="*40)
+            
+            # Select players again
+            player_black = select_player_type("黒")
+            player_white = select_player_type("白")
+            
+            # Create and play game
+            game = OthelloGame(player_black, player_white)
+            game.play()
         elif play_again in ['n', 'no', 'いいえ']:
             print("ありがとうございました！")
             break
