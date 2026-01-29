@@ -125,7 +125,16 @@ class DQNAgent:
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
-            self.device = device
+            self.device = torch.device(device)
+        
+        # Log device info (only once per process to avoid spam)
+        if not hasattr(DQNAgent, '_device_logged'):
+            if self.device.type == 'cuda':
+                print(f"[DQN] Using GPU: {torch.cuda.get_device_name(0)}")
+                print(f"[DQN] GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+            else:
+                print(f"[DQN] Using CPU (GPU not available or not selected)")
+            DQNAgent._device_logged = True
         
         # Create Q-networks
         self.policy_net = DQNetwork().to(self.device)

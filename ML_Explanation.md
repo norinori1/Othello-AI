@@ -276,12 +276,56 @@ DQNでは**ニューラルネットワーク**を使ってQ値を近似します
 
 新しいモデルを学習する場合：
 
+**基本的な使い方:**
 ```bash
 # デフォルト（10,000エピソード）で学習
 python -m Scripts.train
 
 # または
 python Scripts/train.py
+```
+
+**GPU使用を明示的に指定（推奨）:**
+```bash
+# GPUを使用（学習が約3-5倍高速化）
+python -m Scripts.train --device cuda
+
+# CPUを使用
+python -m Scripts.train --device cpu
+
+# エピソード数も指定
+python -m Scripts.train --device cuda --episodes 20000
+
+# 対話なしで実行（バックグラウンド実行に便利）
+python -m Scripts.train --device cuda --episodes 10000 --no-interactive
+```
+
+**GPU対応について:**
+
+GPUを使用すると学習速度が大幅に向上します（約3-5倍）。GPU使用には以下が必要です：
+
+1. **NVIDIA GPU**: CUDA対応のNVIDIA製GPU
+2. **CUDAドライバ**: 適切なバージョンのCUDAドライバがインストール済み
+3. **PyTorch（GPU版）**: CUDA対応のPyTorchをインストール
+
+```bash
+# CUDA 11.8の場合
+pip install torch --index-url https://download.pytorch.org/whl/cu118
+
+# CUDA 12.1の場合
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+GPUが使用可能かどうかは、学習開始時に表示されます：
+```
+============================================================
+DQN Othello AI - Training
+============================================================
+Device: cuda
+GPU Name: NVIDIA GeForce RTX 3080
+GPU Memory: 10.00 GB
+Episodes: 10000
+============================================================
 ```
 
 **注意**: 以下で報告されている結果は5,000エピソードで訓練されたモデルのものです。
@@ -305,12 +349,22 @@ Episode 100/10000
 
 学習したモデルを評価する場合：
 
+**基本的な使い方:**
 ```bash
 # 評価スクリプトを実行
 python -m Scripts.evaluate
 
 # または
 python Scripts/evaluate.py
+```
+
+**GPU使用を指定:**
+```bash
+# GPUで評価
+python -m Scripts.evaluate --device cuda
+
+# 評価ゲーム数も指定
+python -m Scripts.evaluate --device cuda --games 200
 ```
 
 評価結果の例：
@@ -357,6 +411,7 @@ python -m Scripts.gui_game
    - 現在: 5,000エピソード
    - 提案: 20,000〜50,000エピソード
    - 効果: より安定した学習、高い勝率
+   - **GPU使用**: 大幅な時間短縮が可能
 
 2. **報酬設計の改善**
    ```python
@@ -371,8 +426,13 @@ python -m Scripts.gui_game
 
 3. **ハイパーパラメータの調整**
    - 学習率の調整
-   - バッチサイズの最適化
+   - バッチサイズの最適化（GPUメモリに応じて増加可能）
    - ε減衰率の見直し
+
+4. **GPU活用による効率化**
+   - バッチサイズの増加（GPU使用時）
+   - 並列化されたデータ処理
+   - より大きなネットワークの使用
 
 ### 中期的な改善（やや複雑）
 

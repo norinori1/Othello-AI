@@ -17,8 +17,25 @@ pip install -r requirements.txt
 主要なライブラリ:
 - `numpy`: 数値計算
 - `pygame`: GUI版ゲーム
-- `torch`: 機械学習（PyTorch）
+- `torch`: 機械学習（PyTorch）※GPU対応
 - `matplotlib`: 学習曲線の可視化
+
+### GPU対応について
+PyTorchがCUDA対応でインストールされている場合、自動的にGPUを使用します。
+
+**GPU版PyTorchのインストール（推奨）:**
+```bash
+# CUDA 11.8の場合
+pip install torch --index-url https://download.pytorch.org/whl/cu118
+
+# CUDA 12.1の場合
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+# CPU版のみの場合（GPU不要）
+pip install torch
+```
+
+詳細は[PyTorch公式サイト](https://pytorch.org/)を参照してください。
 
 ## 使い方
 
@@ -71,20 +88,31 @@ python Scripts/game.py
 
 DQN（Deep Q-Network）を使用してAIを学習させることができます。
 
+**基本的な使い方:**
 ```bash
 python -m Scripts.train
 ```
 
-または
-
+**GPU使用を明示的に指定:**
 ```bash
-python Scripts/train.py
+# GPUを使用（CUDA対応PyTorchが必要）
+python -m Scripts.train --device cuda
+
+# CPUを使用
+python -m Scripts.train --device cpu
+
+# エピソード数も指定
+python -m Scripts.train --device cuda --episodes 20000
+
+# 対話なしで実行（自動化に便利）
+python -m Scripts.train --device cuda --episodes 10000 --no-interactive
 ```
 
 学習パラメータ:
 - デフォルトエピソード数: 10,000（カスタマイズ可能）
 - 学習アルゴリズム: Deep Q-Network (DQN)
 - 自己対戦による学習
+- **GPU使用時**: 学習速度が大幅に向上（約3-5倍高速）
 
 学習済みモデルは `Models/` ディレクトリに保存されます。
 
@@ -92,14 +120,21 @@ python Scripts/train.py
 
 学習したAIを評価することができます。
 
+**基本的な使い方:**
 ```bash
 python -m Scripts.evaluate
 ```
 
-または
-
+**GPU使用を指定:**
 ```bash
-python Scripts/evaluate.py
+# GPUで評価
+python -m Scripts.evaluate --device cuda
+
+# 評価ゲーム数も指定
+python -m Scripts.evaluate --device cuda --games 200
+
+# 対話なしで実行
+python -m Scripts.evaluate --device cuda --no-interactive
 ```
 
 評価内容:

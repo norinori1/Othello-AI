@@ -4,10 +4,17 @@ Tests the trained agent against random and greedy opponents.
 
 Usage:
     From repo root:
-    python -m Scripts.evaluate
+    python -m Scripts.evaluate [--device cuda/cpu]
     
     Or:
-    python Scripts/evaluate.py
+    python Scripts/evaluate.py [--device cuda/cpu]
+    
+Examples:
+    # Evaluate on GPU (if available)
+    python -m Scripts.evaluate --device cuda
+    
+    # Evaluate on CPU
+    python -m Scripts.evaluate --device cpu
 """
 import sys
 import os
@@ -15,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import torch
 import numpy as np
+import argparse
 
 from Scripts.board import Board, BLACK, WHITE
 from Scripts.dqn_agent import DQNAgent
@@ -148,21 +156,31 @@ def evaluate_against_opponent(dqn_agent, opponent_name, opponent_factory,
     }
 
 
-def evaluate_model(model_path, num_games=100):
+def evaluate_model(model_path, num_games=100, device=None):
     """
     Evaluate a trained model.
     
     Args:
         model_path: Path to the model file
         num_games: Number of games to play against each opponent
+        device: Device to use for evaluation ('cuda', 'cpu', or None for auto)
     """
+    # Setup device
+    if device is None:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    else:
+        device = torch.device(device)
+    
     print("="*60)
     print("DQN Model Evaluation")
     print("="*60)
+    print(f"Device: {device}")
+    if device.type == 'cuda':
+        print(f"GPU Name: {torch.cuda.get_device_name(0)}")
     print(f"Loading model: {model_path}")
     
     # Load agent
-    agent = DQNAgent(BLACK, epsilon=0.0)  # No exploration during evaluation
+    agent = DQNAgent(BLACK, epsilon=0.0, device=device)  # No exploration during evaluation
     try:
         agent.load(model_path)
         print(f"Model loaded successfully!")
@@ -208,9 +226,29 @@ def evaluate_model(model_path, num_games=100):
 
 def main():
     """Main evaluation function."""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Evaluate DQN Othello AI')
+    parser.add_argument('--device', type=str, default=None,
+                       choices=['cuda', 'cpu', 'auto'],
+                       help='Device to use for evaluation (cuda/cpu/auto). Default: auto')
+    parser.add_argument('--model', type=str, default=None,
+                       help='Path to model file to evaluate')
+    parser.add_argument('--games', type=int, default=100,
+                       help='Number of evaluation games. Default: 100')
+    parser.add_argument('--no-interactive', action='store_true',
+                       help='Skip interactive prompts and use defaults')
+    
+    args = parser.parse_args()
+    
     print("\n" + "="*60)
     print("DQN Othello AI - Evaluation")
     print("="*60)
+    
+    # Determine device
+    if args.device == 'auto' or args.device is None:
+        device = None  # Auto-detect
+    else:
+        device = args.device
     
     # Check for available models
     if not os.path.exists(MODELS_DIR):
@@ -226,30 +264,37 @@ def main():
         print("先に学習を実行してください: python -m Scripts.train")
         return
     
-    print("\n利用可能なモデル:")
-    for i, model in enumerate(sorted(model_files)):
-        print(f"  {i+1}: {model}")
-    
     # Select model
-    print("\n評価するモデルを選択してください")
-    print("(Enterキーのみで最新のfinalモデルを使用)")
-    
-    try:
-        choice = input("選択: ").strip()
-        if choice:
-            idx = int(choice) - 1
-            if 0 <= idx < len(model_files):
-                model_name = sorted(model_files)[idx]
-            else:
-                print("無効な選択です。finalモデルを使用します")
-                model_name = 'dqn_black_final.pth'
-        else:
+    if args.model:
+        model_path = args.model
+    else:
+        print("\n利用可能なモデル:")
+        for i, model in enumerate(sorted(model_files)):
+            print(f"  {i+1}: {model}")
+        
+        if args.no_interactive:
             model_name = 'dqn_black_final.pth'
-    except (ValueError, KeyboardInterrupt):
-        print("finalモデルを使用します")
-        model_name = 'dqn_black_final.pth'
-    
-    model_path = os.path.join(MODELS_DIR, model_name)
+        else:
+            # Select model
+            print("\n評価するモデルを選択してください")
+            print("(Enterキーのみで最新のfinalモデルを使用)")
+            
+            try:
+                choice = input("選択: ").strip()
+                if choice:
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(model_files):
+                        model_name = sorted(model_files)[idx]
+                    else:
+                        print("無効な選択です。finalモデルを使用します")
+                        model_name = 'dqn_black_final.pth'
+                else:
+                    model_name = 'dqn_black_final.pth'
+            except (ValueError, KeyboardInterrupt):
+                print("finalモデルを使用します")
+                model_name = 'dqn_black_final.pth'
+        
+        model_path = os.path.join(MODELS_DIR, model_name)
     
     # Check if model exists
     if not os.path.exists(model_path):
@@ -257,21 +302,21 @@ def main():
         return
     
     # Get number of evaluation games
-    try:
-        num_games_input = input("\n評価ゲーム数 (デフォルト: 100): ").strip()
-        if num_games_input:
-            num_games = int(num_games_input)
-        else:
-            num_games = 100
-    except (ValueError, KeyboardInterrupt):
-        print("デフォルト値 (100) を使用します")
-        num_games = 100
+    num_games = args.games
+    if not args.no_interactive and args.games == 100:
+        try:
+            num_games_input = input("\n評価ゲーム数 (デフォルト: 100): ").strip()
+            if num_games_input:
+                num_games = int(num_games_input)
+        except (ValueError, KeyboardInterrupt):
+            print("デフォルト値 (100) を使用します")
     
     print(f"\n評価を開始します...")
-    input("Enterキーを押して開始...")
+    if not args.no_interactive:
+        input("Enterキーを押して開始...")
     
     # Evaluate
-    evaluate_model(model_path, num_games=num_games)
+    evaluate_model(model_path, num_games=num_games, device=device)
     
     print("\n評価が完了しました！")
 

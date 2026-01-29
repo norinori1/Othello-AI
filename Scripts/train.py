@@ -4,10 +4,20 @@ Implements self-play training using Deep Q-Learning.
 
 Usage:
     From repo root:
-    python -m Scripts.train
+    python -m Scripts.train [--device cuda/cpu] [--episodes N]
     
     Or:
-    python Scripts/train.py
+    python Scripts/train.py [--device cuda/cpu] [--episodes N]
+    
+Examples:
+    # Train on GPU (if available)
+    python -m Scripts.train --device cuda
+    
+    # Train on CPU
+    python -m Scripts.train --device cpu
+    
+    # Train with custom episode count on GPU
+    python -m Scripts.train --device cuda --episodes 20000
 """
 import sys
 import os
@@ -17,6 +27,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+import argparse
 
 from Scripts.board import Board, BLACK, WHITE
 from Scripts.dqn_agent import DQNAgent
@@ -126,7 +137,7 @@ def play_training_game(agent_black, agent_white, training=True):
 
 
 def train_dqn(num_episodes=10000, batch_size=32, target_update_freq=1000,
-              save_freq=1000, eval_freq=1000, print_freq=100):
+              save_freq=1000, eval_freq=1000, print_freq=100, device=None):
     """
     Train DQN agent using self-play.
     
@@ -137,19 +148,29 @@ def train_dqn(num_episodes=10000, batch_size=32, target_update_freq=1000,
         save_freq: Frequency to save model
         eval_freq: Frequency to evaluate model
         print_freq: Frequency to print progress
+        device: Device to use for training ('cuda', 'cpu', or None for auto)
     """
+    # Setup device
+    if device is None:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    else:
+        device = torch.device(device)
+    
     print("="*60)
     print("DQN Othello AI - Training")
     print("="*60)
-    print(f"Device: {torch.device('cuda' if torch.cuda.is_available() else 'cpu')}")
+    print(f"Device: {device}")
+    if device.type == 'cuda':
+        print(f"GPU Name: {torch.cuda.get_device_name(0)}")
+        print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
     print(f"Episodes: {num_episodes}")
     print(f"Batch size: {batch_size}")
     print(f"Target update frequency: {target_update_freq}")
     print("="*60)
     
-    # Create agents
-    agent_black = DQNAgent(BLACK)
-    agent_white = DQNAgent(WHITE)
+    # Create agents with specified device
+    agent_black = DQNAgent(BLACK, device=device)
+    agent_white = DQNAgent(WHITE, device=device)
     
     # Share experience replay buffer for efficiency
     # Note: Both agents have separate networks but learn from the same pool of experiences
@@ -297,6 +318,20 @@ def plot_learning_curves(rewards_black, rewards_white, losses):
 
 def main():
     """Main training function."""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Train DQN Othello AI')
+    parser.add_argument('--device', type=str, default=None, 
+                       choices=['cuda', 'cpu', 'auto'],
+                       help='Device to use for training (cuda/cpu/auto). Default: auto')
+    parser.add_argument('--episodes', type=int, default=None,
+                       help='Number of training episodes. Default: interactive or 10000')
+    parser.add_argument('--batch-size', type=int, default=32,
+                       help='Batch size for training. Default: 32')
+    parser.add_argument('--no-interactive', action='store_true',
+                       help='Skip interactive prompts and use defaults')
+    
+    args = parser.parse_args()
+    
     print("\n" + "="*60)
     print("DQN Othello AI Training")
     print("="*60)
@@ -311,31 +346,49 @@ def main():
     print("  - Replay buffer: 10000")
     print("  - Target network update: every 1000 steps")
     
-    # Ask user for number of episodes
-    print("\nカスタマイズオプション:")
-    try:
-        episodes_input = input("エピソード数を入力 (デフォルト: 10000, 推奨: 1000-50000): ").strip()
-        if episodes_input:
-            num_episodes = int(episodes_input)
-        else:
-            num_episodes = 10000
-    except (ValueError, KeyboardInterrupt):
-        print("デフォルト値を使用します")
+    # Determine device
+    if args.device == 'auto' or args.device is None:
+        device = None  # Let DQNAgent auto-detect
+        device_str = 'auto (cuda if available, else cpu)'
+    else:
+        device = args.device
+        device_str = device
+    
+    print(f"  - Device: {device_str}")
+    
+    # Determine number of episodes
+    if args.episodes is not None:
+        num_episodes = args.episodes
+    elif args.no_interactive:
         num_episodes = 10000
+    else:
+        # Ask user for number of episodes
+        print("\nカスタマイズオプション:")
+        try:
+            episodes_input = input("エピソード数を入力 (デフォルト: 10000, 推奨: 1000-50000): ").strip()
+            if episodes_input:
+                num_episodes = int(episodes_input)
+            else:
+                num_episodes = 10000
+        except (ValueError, KeyboardInterrupt):
+            print("デフォルト値を使用します")
+            num_episodes = 10000
     
     print(f"\n学習を開始します... (エピソード数: {num_episodes})")
     print("注意: 学習には時間がかかる場合があります")
-    input("Enterキーを押して開始...")
+    if not args.no_interactive:
+        input("Enterキーを押して開始...")
     
     # Train
     try:
         agent_black, agent_white = train_dqn(
             num_episodes=num_episodes,
-            batch_size=32,
+            batch_size=args.batch_size,
             target_update_freq=1000,
             save_freq=1000,
             eval_freq=1000,
-            print_freq=100
+            print_freq=100,
+            device=device
         )
         
         print("\n学習が正常に完了しました！")
