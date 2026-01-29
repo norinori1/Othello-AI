@@ -208,11 +208,11 @@ class DQNAgent:
         with torch.no_grad():
             q_values = self.policy_net(state_tensor).squeeze(0)
         
-        # Mask invalid actions
-        mask = torch.full((65,), float('-inf'))
+        # Mask invalid actions (create directly on device)
+        mask = torch.full((65,), float('-inf'), device=self.device)
         for idx in valid_actions:
             mask[idx] = 0
-        q_values = q_values + mask.to(self.device)
+        q_values = q_values + mask
         
         # Select best valid action
         action_idx = q_values.argmax().item()

@@ -166,6 +166,7 @@ def select_player_type(color_name):
                 # Try to load DQN agent
                 try:
                     from Scripts.dqn_agent import DQNAgent
+                    import torch
                     models_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Models')
                     model_file = f'dqn_{"black" if color == BLACK else "white"}_final.pth'
                     model_path = os.path.join(models_dir, model_file)
@@ -179,8 +180,12 @@ def select_player_type(color_name):
                     agent.load(model_path)
                     print(f"学習済みDQNモデルを読み込みました (エピソード: {agent.episode_count})")
                     return AIPlayer(agent)
-                except Exception as e:
-                    print(f"エラー: DQNモデルの読み込みに失敗しました: {e}")
+                except ImportError as e:
+                    print(f"エラー: PyTorchがインストールされていません: {e}")
+                    print("pip install torch を実行してください")
+                    continue
+                except (FileNotFoundError, RuntimeError) as e:
+                    print(f"エラー: モデルの読み込みに失敗しました: {e}")
                     continue
             else:
                 print("1, 2, 3, または 4 を入力してください")

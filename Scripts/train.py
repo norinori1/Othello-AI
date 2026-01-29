@@ -151,7 +151,8 @@ def train_dqn(num_episodes=10000, batch_size=32, target_update_freq=1000,
     agent_black = DQNAgent(BLACK)
     agent_white = DQNAgent(WHITE)
     
-    # Share experience replay buffer for efficiency (both learn from all games)
+    # Share experience replay buffer for efficiency
+    # Note: Both agents have separate networks but learn from the same pool of experiences
     shared_buffer = agent_black.replay_buffer
     agent_white.replay_buffer = shared_buffer
     
