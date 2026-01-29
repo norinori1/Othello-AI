@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from Scripts.board import Board, BLACK, WHITE, EMPTY
 from Scripts.player import HumanPlayer, AIPlayer
 from Scripts.agents import RandomAgent, GreedyAgent
+import os
 
 
 class OthelloGame:
@@ -146,24 +147,48 @@ def select_player_type(color_name):
     print("  1: 人間")
     print("  2: ランダムAI")
     print("  3: 貪欲AI (最も多く石を取る手を選ぶ)")
+    print("  4: 学習済みDQN AI (Deep Q-Network)")
     
     while True:
         try:
-            choice = input("選択 (1-3): ").strip()
+            choice = input("選択 (1-4): ").strip()
+            color = BLACK if color_name == "黒" else WHITE
             
             if choice == "1":
-                color = BLACK if color_name == "黒" else WHITE
                 return HumanPlayer(color)
             elif choice == "2":
-                color = BLACK if color_name == "黒" else WHITE
                 agent = RandomAgent(color)
                 return AIPlayer(agent)
             elif choice == "3":
-                color = BLACK if color_name == "黒" else WHITE
                 agent = GreedyAgent(color)
                 return AIPlayer(agent)
+            elif choice == "4":
+                # Try to load DQN agent
+                try:
+                    from Scripts.dqn_agent import DQNAgent
+                    import torch
+                    models_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Models')
+                    model_file = f'dqn_{"black" if color == BLACK else "white"}_final.pth'
+                    model_path = os.path.join(models_dir, model_file)
+                    
+                    if not os.path.exists(model_path):
+                        print(f"\nエラー: モデルファイルが見つかりません: {model_path}")
+                        print("先に学習を実行してください: python -m Scripts.train")
+                        continue
+                    
+                    agent = DQNAgent(color, epsilon=0.0)  # No exploration during play
+                    agent.load(model_path)
+                    print(f"学習済みDQNモデルを読み込みました (エピソード: {agent.episode_count})")
+                    return AIPlayer(agent)
+                except ImportError as e:
+                    print(f"エラー: PyTorchがインストールされていません: {e}")
+                    print("pip install torch を実行してください")
+                    continue
+                except (FileNotFoundError, RuntimeError) as e:
+                    print(f"エラー: モデルの読み込みに失敗しました: {e}")
+                    continue
             else:
-                print("1, 2, または 3 を入力してください")
+                print("1, 2, 3, または 4 を入力してください")
         except (ValueError, KeyboardInterrupt):
             print("\n入力エラー。もう一度入力してください")
 
