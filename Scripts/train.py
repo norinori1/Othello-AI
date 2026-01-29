@@ -98,10 +98,12 @@ def play_training_game(agent_black, agent_white, training=True):
     # Game states for each player
     prev_state_black = None
     prev_action_black = None
-    prev_board_black = None
+    prev_board_before_black = None
+    prev_board_after_black = None
     prev_state_white = None
     prev_action_white = None
-    prev_board_white = None
+    prev_board_before_white = None
+    prev_board_after_white = None
     
     while True:
         moves = board.valid_moves(to_play)
@@ -124,29 +126,31 @@ def play_training_game(agent_black, agent_white, training=True):
             # Apply move
             board.apply_move(move, to_play)
             
-            # Calculate intermediate reward
-            intermediate_reward = calculate_intermediate_reward(board_before, board, move, to_play)
+            # Save board state after move
+            board_after = board.copy()
             
             # Store previous experience if exists
             if to_play == BLACK:
                 if prev_state_black is not None:
-                    # Calculate intermediate reward for previous move
+                    # Calculate intermediate reward for previous move using correct board states
                     prev_intermediate_reward = calculate_intermediate_reward(
-                        prev_board_black, board_before, prev_action_black, BLACK)
+                        prev_board_before_black, prev_board_after_black, prev_action_black, BLACK)
                     experiences_black.append((prev_state_black, prev_action_black, 
                                             prev_intermediate_reward, state, False))
                 prev_state_black = state.copy()
                 prev_action_black = move
-                prev_board_black = board_before
+                prev_board_before_black = board_before
+                prev_board_after_black = board_after
             else:
                 if prev_state_white is not None:
                     prev_intermediate_reward = calculate_intermediate_reward(
-                        prev_board_white, board_before, prev_action_white, WHITE)
+                        prev_board_before_white, prev_board_after_white, prev_action_white, WHITE)
                     experiences_white.append((prev_state_white, prev_action_white, 
                                             prev_intermediate_reward, state, False))
                 prev_state_white = state.copy()
                 prev_action_white = move
-                prev_board_white = board_before
+                prev_board_before_white = board_before
+                prev_board_after_white = board_after
         else:
             passes += 1
             if passes >= 2:
@@ -175,9 +179,9 @@ def play_training_game(agent_black, agent_white, training=True):
     
     # Add terminal experiences with both intermediate and terminal rewards
     if prev_state_black is not None:
-        # Calculate intermediate reward for the last move
+        # Calculate intermediate reward for the last move using correct board states
         last_intermediate_reward = calculate_intermediate_reward(
-            prev_board_black, board, prev_action_black, BLACK)
+            prev_board_before_black, prev_board_after_black, prev_action_black, BLACK)
         # Combine with terminal reward
         final_reward_black = last_intermediate_reward + terminal_reward_black
         final_state = board.to_tensor(BLACK)
@@ -185,7 +189,7 @@ def play_training_game(agent_black, agent_white, training=True):
     
     if prev_state_white is not None:
         last_intermediate_reward = calculate_intermediate_reward(
-            prev_board_white, board, prev_action_white, WHITE)
+            prev_board_before_white, prev_board_after_white, prev_action_white, WHITE)
         final_reward_white = last_intermediate_reward + terminal_reward_white
         final_state = board.to_tensor(WHITE)
         experiences_white.append((prev_state_white, prev_action_white, final_reward_white, final_state, True))
