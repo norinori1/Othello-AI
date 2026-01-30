@@ -113,3 +113,30 @@ class Board:
         for (r,c) in self.valid_moves(to_play):
             arr[2,r,c] = 1
         return arr
+    
+    def is_corner(self, r, c):
+        """Check if position (r, c) is a corner."""
+        return (r, c) in [(0, 0), (0, 7), (7, 0), (7, 7)]
+    
+    def is_edge(self, r, c):
+        """Check if position (r, c) is on the edge (but not a corner)."""
+        if self.is_corner(r, c):
+            return False
+        return r == 0 or r == 7 or c == 0 or c == 7
+    
+    def count_corners(self, color):
+        """Count how many corners are occupied by the given color."""
+        count = 0
+        for r, c in [(0, 0), (0, 7), (7, 0), (7, 7)]:
+            if self.grid[r][c] == color:
+                count += 1
+        return count
+    
+    def count_edges(self, color):
+        """Count how many edge positions (not corners) are occupied by the given color."""
+        count = 0
+        for r in range(8):
+            for c in range(8):
+                if self.is_edge(r, c) and self.grid[r][c] == color:
+                    count += 1
+        return count

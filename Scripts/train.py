@@ -31,6 +31,7 @@ import argparse
 
 from Scripts.board import Board, BLACK, WHITE
 from Scripts.dqn_agent import DQNAgent
+from Scripts.agents import GreedyAgent, RandomAgent
 
 
 # Create necessary directories
@@ -38,6 +39,41 @@ MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Models')
 LOGS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Logs')
 os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
+
+
+def calculate_intermediate_reward(board_before, board_after, move, color):
+    """
+    Calculate intermediate reward for a move based on strategic features.
+    
+    Args:
+        board_before: Board state before the move
+        board_after: Board state after the move
+        move: The move played (row, col) or None
+        color: Color of the player
+        
+    Returns:
+        float: Intermediate reward
+    """
+    if move is None:
+        return 0.0
+    
+    reward = 0.0
+    
+    # Corner bonus: +0.1 for capturing a corner
+    if board_after.is_corner(move[0], move[1]):
+        reward += 0.1
+    
+    # Edge bonus: +0.05 for capturing an edge (not corner)
+    elif board_after.is_edge(move[0], move[1]):
+        reward += 0.05
+    
+    # Stone difference bonus: +0.01 per net stone gained
+    score_before = board_before.score()
+    score_after = board_after.score()
+    stone_diff = score_after[color] - score_before[color]
+    reward += 0.01 * stone_diff
+    
+    return reward
 
 
 def play_training_game(agent_black, agent_white, training=True):
@@ -63,8 +99,12 @@ def play_training_game(agent_black, agent_white, training=True):
     # Game states for each player
     prev_state_black = None
     prev_action_black = None
+    prev_board_before_black = None
+    prev_board_after_black = None
     prev_state_white = None
     prev_action_white = None
+    prev_board_before_white = None
+    prev_board_after_white = None
     
     while True:
         moves = board.valid_moves(to_play)
@@ -78,25 +118,43 @@ def play_training_game(agent_black, agent_white, training=True):
             # Get current state
             state = board.to_tensor(to_play)
             
-            # Select action
-            move = agent.select_move(board, training=training)
+            # Select action (support agents without training arg)
+            try:
+                move = agent.select_move(board, training=training)
+            except TypeError:
+                move = agent.select_move(board)
             
-            # Store previous state and action
-            if to_play == BLACK:
-                # Store previous experience if exists
-                if prev_state_black is not None:
-                    # Intermediate reward is 0 (only terminal reward matters)
-                    experiences_black.append((prev_state_black, prev_action_black, 0.0, state, False))
-                prev_state_black = state.copy()
-                prev_action_black = move
-            else:
-                if prev_state_white is not None:
-                    experiences_white.append((prev_state_white, prev_action_white, 0.0, state, False))
-                prev_state_white = state.copy()
-                prev_action_white = move
+            # Save board state before move
+            board_before = board.copy()
             
             # Apply move
             board.apply_move(move, to_play)
+            
+            # Save board state after move
+            board_after = board.copy()
+            
+            # Store previous experience if exists
+            if to_play == BLACK:
+                if prev_state_black is not None:
+                    # Calculate intermediate reward for previous move using correct board states
+                    prev_intermediate_reward = calculate_intermediate_reward(
+                        prev_board_before_black, prev_board_after_black, prev_action_black, BLACK)
+                    experiences_black.append((prev_state_black, prev_action_black, 
+                                            prev_intermediate_reward, state, False))
+                prev_state_black = state.copy()
+                prev_action_black = move
+                prev_board_before_black = board_before
+                prev_board_after_black = board_after
+            else:
+                if prev_state_white is not None:
+                    prev_intermediate_reward = calculate_intermediate_reward(
+                        prev_board_before_white, prev_board_after_white, prev_action_white, WHITE)
+                    experiences_white.append((prev_state_white, prev_action_white, 
+                                            prev_intermediate_reward, state, False))
+                prev_state_white = state.copy()
+                prev_action_white = move
+                prev_board_before_white = board_before
+                prev_board_after_white = board_after
         else:
             passes += 1
             if passes >= 2:
@@ -111,33 +169,41 @@ def play_training_game(agent_black, agent_white, training=True):
     winner = board.winner()
     score = board.score()
     
-    # Reward design: +1 for win, -1 for loss, 0 for draw
-    reward_black = 0.0
-    reward_white = 0.0
+    # Terminal reward: +1 for win, -1 for loss, 0 for draw
+    terminal_reward_black = 0.0
+    terminal_reward_white = 0.0
     
     if winner == BLACK:
-        reward_black = 1.0
-        reward_white = -1.0
+        terminal_reward_black = 1.0
+        terminal_reward_white = -1.0
     elif winner == WHITE:
-        reward_black = -1.0
-        reward_white = 1.0
+        terminal_reward_black = -1.0
+        terminal_reward_white = 1.0
     # else: draw, both get 0
     
-    # Add terminal experiences
+    # Add terminal experiences with both intermediate and terminal rewards
     if prev_state_black is not None:
-        # Final state is the current board state
+        # Calculate intermediate reward for the last move using correct board states
+        last_intermediate_reward = calculate_intermediate_reward(
+            prev_board_before_black, prev_board_after_black, prev_action_black, BLACK)
+        # Combine with terminal reward
+        final_reward_black = last_intermediate_reward + terminal_reward_black
         final_state = board.to_tensor(BLACK)
-        experiences_black.append((prev_state_black, prev_action_black, reward_black, final_state, True))
+        experiences_black.append((prev_state_black, prev_action_black, final_reward_black, final_state, True))
     
     if prev_state_white is not None:
+        last_intermediate_reward = calculate_intermediate_reward(
+            prev_board_before_white, prev_board_after_white, prev_action_white, WHITE)
+        final_reward_white = last_intermediate_reward + terminal_reward_white
         final_state = board.to_tensor(WHITE)
-        experiences_white.append((prev_state_white, prev_action_white, reward_white, final_state, True))
+        experiences_white.append((prev_state_white, prev_action_white, final_reward_white, final_state, True))
     
     return winner, experiences_black, experiences_white
 
 
 def train_dqn(num_episodes=10000, batch_size=32, target_update_freq=1000,
-              save_freq=1000, eval_freq=1000, print_freq=100, device=None):
+              save_freq=1000, eval_freq=1000, print_freq=100, device=None,
+              opponent_type='dqn'):
     """
     Train DQN agent using self-play.
     
@@ -178,12 +244,19 @@ def train_dqn(num_episodes=10000, batch_size=32, target_update_freq=1000,
     
     # Create agents with specified device
     agent_black = DQNAgent(BLACK, device=device)
-    agent_white = DQNAgent(WHITE, device=device)
-    
-    # Share experience replay buffer for efficiency
-    # Note: Both agents have separate networks but learn from the same pool of experiences
-    shared_buffer = agent_black.replay_buffer
-    agent_white.replay_buffer = shared_buffer
+
+    # Create opponent according to opponent_type
+    if opponent_type == 'dqn':
+        agent_white = DQNAgent(WHITE, device=device)
+        # Share experience replay buffer for efficiency when both are DQN
+        shared_buffer = agent_black.replay_buffer
+        agent_white.replay_buffer = shared_buffer
+    elif opponent_type == 'greedy':
+        agent_white = GreedyAgent(WHITE)
+        shared_buffer = agent_black.replay_buffer
+    else:
+        agent_white = RandomAgent(WHITE)
+        shared_buffer = agent_black.replay_buffer
     
     # Training statistics
     episode_rewards_black = []
@@ -201,11 +274,12 @@ def train_dqn(num_episodes=10000, batch_size=32, target_update_freq=1000,
         else:
             wins[winner] += 1
         
-        # Add experiences to replay buffer
+        # Add experiences to replay buffer (only push opponent experiences if opponent is DQN)
         for exp in exp_black:
             shared_buffer.push(*exp)
-        for exp in exp_white:
-            shared_buffer.push(*exp)
+        if opponent_type == 'dqn':
+            for exp in exp_white:
+                shared_buffer.push(*exp)
         
         # Track rewards
         total_reward_black = sum(exp[2] for exp in exp_black)  # reward is index 2
@@ -213,20 +287,30 @@ def train_dqn(num_episodes=10000, batch_size=32, target_update_freq=1000,
         episode_rewards_black.append(total_reward_black)
         episode_rewards_white.append(total_reward_white)
         
-        # Train both agents
+        # Train agents (only call train_step on agents that implement it)
         if len(shared_buffer) >= batch_size:
-            loss_black = agent_black.train_step(batch_size)
-            loss_white = agent_white.train_step(batch_size)
-            losses.append((loss_black + loss_white) / 2)
+            loss_vals = []
+            if hasattr(agent_black, 'train_step'):
+                loss_black = agent_black.train_step(batch_size)
+                loss_vals.append(loss_black)
+            if hasattr(agent_white, 'train_step'):
+                loss_white = agent_white.train_step(batch_size)
+                loss_vals.append(loss_white)
+            if loss_vals:
+                losses.append(sum(loss_vals) / len(loss_vals))
         
-        # Decay epsilon
-        agent_black.decay_epsilon()
-        agent_white.decay_epsilon()
+        # Decay epsilon where supported
+        if hasattr(agent_black, 'decay_epsilon'):
+            agent_black.decay_epsilon()
+        if hasattr(agent_white, 'decay_epsilon'):
+            agent_white.decay_epsilon()
         
-        # Update target network
+        # Update target networks where supported
         if (episode + 1) % target_update_freq == 0:
-            agent_black.update_target_network()
-            agent_white.update_target_network()
+            if hasattr(agent_black, 'update_target_network'):
+                agent_black.update_target_network()
+            if hasattr(agent_white, 'update_target_network'):
+                agent_white.update_target_network()
         
         # Print progress
         if (episode + 1) % print_freq == 0:
@@ -241,19 +325,29 @@ def train_dqn(num_episodes=10000, batch_size=32, target_update_freq=1000,
             print(f"  Wins (last {print_freq}): Black={wins[BLACK]}, White={wins[WHITE]}, Draw={wins['draw']}")
             wins = {BLACK: 0, WHITE: 0, 'draw': 0}  # Reset for next window
         
-        # Save model
+        # Save model (only for agents that implement save)
         if (episode + 1) % save_freq == 0:
-            model_path_black = os.path.join(MODELS_DIR, f'dqn_black_ep{episode+1}.pth')
-            model_path_white = os.path.join(MODELS_DIR, f'dqn_white_ep{episode+1}.pth')
-            agent_black.save(model_path_black)
-            agent_white.save(model_path_white)
-            print(f"  Models saved: {model_path_black}, {model_path_white}")
+            if hasattr(agent_black, 'save'):
+                model_path_black = os.path.join(MODELS_DIR, f'dqn_black_ep{episode+1}.pth')
+                agent_black.save(model_path_black)
+            if hasattr(agent_white, 'save'):
+                model_path_white = os.path.join(MODELS_DIR, f'dqn_white_ep{episode+1}.pth')
+                agent_white.save(model_path_white)
+            saved_paths = []
+            if 'model_path_black' in locals(): saved_paths.append(model_path_black)
+            if 'model_path_white' in locals(): saved_paths.append(model_path_white)
+            if saved_paths:
+                print(f"  Models saved: {', '.join(saved_paths)}")
     
     # Save final models
     final_model_black = os.path.join(MODELS_DIR, 'dqn_black_final.pth')
+    if hasattr(agent_black, 'save'):
+        agent_black.save(final_model_black)
+        print(f"Final model saved: {final_model_black}")
     final_model_white = os.path.join(MODELS_DIR, 'dqn_white_final.pth')
-    agent_black.save(final_model_black)
-    agent_white.save(final_model_white)
+    if hasattr(agent_white, 'save'):
+        agent_white.save(final_model_white)
+        print(f"Final model saved: {final_model_white}")
     
     print("\n" + "="*60)
     print("Training completed!")
@@ -331,6 +425,9 @@ def main():
     parser.add_argument('--device', type=str, default=None, 
                        choices=['cuda', 'cpu', 'auto'],
                        help='Device to use for training (cuda/cpu/auto). Default: auto')
+    parser.add_argument('--opponent', type=str, default='dqn',
+                        choices=['dqn', 'greedy', 'random'],
+                        help='Opponent type for white agent (dqn/greedy/random)')
     parser.add_argument('--episodes', type=int, default=None,
                        help='Number of training episodes. Default: interactive or 10000')
     parser.add_argument('--batch-size', type=int, default=32,
@@ -363,6 +460,7 @@ def main():
         device_str = device
     
     print(f"  - Device: {device_str}")
+    print(f"  - Opponent: {args.opponent}")
     
     # Determine number of episodes
     if args.episodes is not None:
@@ -396,7 +494,8 @@ def main():
             save_freq=1000,
             eval_freq=1000,
             print_freq=100,
-            device=device
+            device=device,
+            opponent_type=args.opponent
         )
         
         print("\n学習が正常に完了しました！")
